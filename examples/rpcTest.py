@@ -20,8 +20,8 @@ accountAddr = account.address()
 print("Address:", accountAddr,"\n")
 
 # # faucet
-# faucetResult = faucetClient.Faucet(accountAddr)
-# print(faucetClient,"\n")
+faucetResult = faucetClient.Faucet(accountAddr)
+print(faucetResult,"\n")
 
 
 # Get all my objects and sui balance

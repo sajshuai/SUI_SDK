@@ -18,7 +18,7 @@ print("Address:", accountAddr)
 
 # # faucet
 faucetResult = faucetClient.Faucet(accountAddr)
-print(faucetResult)
+print(faucetResult,"\n")
 
 suiObjects = client.GetSuiObjectsOwnedByAddress(accountAddr)
 print(suiObjects, "\n")

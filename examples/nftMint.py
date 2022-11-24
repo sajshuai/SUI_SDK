@@ -17,7 +17,7 @@ accountAddr = account.address()
 print("Address:", accountAddr)
 # # faucet
 faucetResult = faucetClient.Faucet(accountAddr)
-print(faucetResult)
+print(faucetResult,"\n")
 
 if len(client.GetSuiObjectsOwnedByAddress(accountAddr)) == 0:
     print("No SUI")
