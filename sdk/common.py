@@ -1,0 +1,1 @@
+SUI_DECIMALS = 9
