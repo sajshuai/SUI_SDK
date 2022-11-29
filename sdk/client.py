@@ -2,7 +2,9 @@ import httpx
 from sdk.account import Account
 import base64
 import time
-
+import aiohttp
+import asyncio
+import json
 
 class RestClient:
     chain_id: int
@@ -33,7 +35,7 @@ class RestClient:
         )
         if response.status_code == 404:
             raise SuiRpcError(response.status_code, response.text)
-            
+
         return response.json()
 
     def RpcDiscover(self):
@@ -192,6 +194,21 @@ class SuiClient(RestClient):
     #  4. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node executed the transaction locally before returning the client.
     #       The local execution makes sure this node is aware of this transaction when client fires subsequent queries.
     #       However if the node fails to execute the transaction locally in a timely manner, a bool type in the response is set to false to indicated the case.
+    def __init__(self, baseUrl: str) -> None:
+        super().__init__(baseUrl)
+        self.semaphore = asyncio.Semaphore(5)
+
+    async def AsyncGetObject(self, objectId):
+        params = {
+            "jsonrpc": self.jsonRpcVersion,
+            "id": self.jsonRpcId,
+            "method": "sui_getObject",
+            "params": [objectId]
+        }
+        async with self.semaphore:
+            async with self.session.post(self.baseUrl, data=json.dumps(params), headers={"Content-Type": "application/json"}) as response:
+                return await response.text()
+
     def SignAndSubmitTransaction(self, account: Account, txBytes: str, sig_scheme="ED25519", request_type="WaitForLocalExecution"):
         pubBytes = account.publicKey().key.encode()
         pubB64 = bytes.decode(base64.b64encode(pubBytes))
@@ -203,7 +220,7 @@ class SuiClient(RestClient):
             txBytes, sig_scheme, signedData, pubB64, request_type)
         return result
 
-    def GetSpecificObjectsOwnedByAddress(self, accountAddress, filterObjectType):
+    def GetSpecificObjectsOwnedByAddressSync(self, accountAddress, filterObjectType):
         accountObjects = self.GetObjectsOwnedByAddress(accountAddress)
         suiObjectIdList = []
         for object in accountObjects['result']:
@@ -219,6 +236,37 @@ class SuiClient(RestClient):
                 suiObjectInfo['objectId'] = objectId
                 suiObjectIdList.append(suiObjectInfo)
         return suiObjectIdList
+
+    async def GetSpecificObjectsOwnedByAddressMain(self, accountAddress, filterObjectType):
+        accountObjects = self.GetObjectsOwnedByAddress(accountAddress)
+        suiObjectIdList = []
+        getObjectTasks = []
+        for object in accountObjects['result']:
+            objectId = object['objectId']
+            getObjectTasks.append(asyncio.ensure_future(
+                self.AsyncGetObject(objectId)))
+        objects = await asyncio.gather(*getObjectTasks)
+        for objectDetail in objects:
+            objectDetail = json.loads(objectDetail)
+            objectType = objectDetail['result']['details']['data']['type']
+            if 'fields' in objectDetail['result']['details']['data']:
+                objectFields = objectDetail['result']['details']['data']['fields']
+            if objectType == filterObjectType:
+                suiObjectInfo = {}
+                if objectFields != None and 'balance' in objectFields:
+                    suiObjectInfo['balance'] = objectFields['balance']
+                suiObjectInfo['objectId'] = objectId
+                suiObjectIdList.append(suiObjectInfo)
+        return suiObjectIdList
+
+    def GetSpecificObjectsOwnedByAddress(self, accountAddress, filterObjectType):
+        self.session = aiohttp.ClientSession()
+        loop = asyncio.get_event_loop()
+        getObjectsTask = loop.create_task(self.GetSpecificObjectsOwnedByAddressMain(accountAddress, filterObjectType))
+        loop.run_until_complete(getObjectsTask)
+        loop.run_until_complete(self.session.close())
+        loop.close()
+        return getObjectsTask.result()
 
     def GetSuiObjectsOwnedByAddress(self, accountAddress):
         return self.GetSpecificObjectsOwnedByAddress(accountAddress, "0x2::coin::Coin<0x2::sui::SUI>")
@@ -267,7 +315,7 @@ class FaucetClient:
         self.restClient.close()
 
     def Faucet(self, address: str):
-        data = {"FixedAmountRequest":{"recipient":address}}
+        data = {"FixedAmountRequest": {"recipient": address}}
 
         response = self.restClient.client.post(
             f"{self.baseUrl}",
@@ -275,7 +323,8 @@ class FaucetClient:
             headers={"Content-Type": "application/json"},
             timeout=10)
         if response.status_code == 429:
-            raise SuiRpcError(response.status_code, "IP limit,Too many requests Limit")
+            raise SuiRpcError(response.status_code,
+                              "IP limit,Too many requests Limit")
         if response.status_code >= 400:
             raise SuiRpcError(response.status_code, response.text)
         return response.text
