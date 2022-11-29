@@ -64,6 +64,10 @@ class RestClient:
         params = [tx_bytes, sig_scheme, signature, pub_key, request_type]
         return self.jsonRpc("sui_executeTransaction", params)
 
+    def GetCoinMetadata(self, coin_type):
+        params = [coin_type]
+        return self.jsonRpc("sui_getCoinMetadata", params)
+
     def GetCommitteeInfo(self, epoch: int):
         params = [epoch]
         return self.jsonRpc("sui_getCommitteeInfo", params)
