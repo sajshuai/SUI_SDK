@@ -6,6 +6,7 @@ import aiohttp
 import asyncio
 import json
 
+
 class RestClient:
     chain_id: int
     client: httpx.Client
@@ -36,6 +37,7 @@ class RestClient:
         if response.status_code == 404:
             raise SuiRpcError(response.status_code, response.text)
 
+        print(response.text)
         return response.json()
 
     def RpcDiscover(self):
@@ -64,13 +66,45 @@ class RestClient:
         params = [tx_bytes, sig_scheme, signature, pub_key, request_type]
         return self.jsonRpc("sui_executeTransaction", params)
 
+    def ExecuteTransactionSerializedSig(self, tx_bytes, signature, request_type):
+        params = [tx_bytes, signature, request_type]
+        return self.jsonRpc("sui_executeTransactionSerializedSig", params)
+
+    def GetAllBalances(self, owner: str):
+        params = [owner]
+        return self.jsonRpc("sui_getAllBalances", params)
+
+    def GetAllCoins(self, owner: str, cursor: str, limit: int):
+        params = [owner, cursor, limit]
+        return self.jsonRpc("sui_getAllCoins", params)
+
+    def GetBalance(self, owner: str, coin_type: str):
+        params = [owner, coin_type]
+        return self.jsonRpc("sui_getBalance", params)
+
     def GetCoinMetadata(self, coin_type):
         params = [coin_type]
         return self.jsonRpc("sui_getCoinMetadata", params)
 
+    def GetCoins(self, owner: str, coin_type: str, cursor: str, limit: int):
+        params = [owner, coin_type, cursor, limit]
+        return self.jsonRpc("sui_getCoins", params)
+
     def GetCommitteeInfo(self, epoch: int):
         params = [epoch]
         return self.jsonRpc("sui_getCommitteeInfo", params)
+
+    def GetDelegatedStakes(self, owner: str):
+        params = [owner]
+        return self.jsonRpc("sui_getDelegatedStakes", params)
+
+    def GetDynamicFieldObject(self, parent_object_id: str, name: str):
+        params = [parent_object_id, name]
+        return self.jsonRpc("sui_getDynamicFieldObject", params)
+
+    def GetDynamicFields(self, parent_object_id: str, cursor: str, limit: int):
+        params = [parent_object_id, cursor, limit]
+        return self.jsonRpc("sui_getDynamicFields", params)
 
     def GetEvents(self, query, cursor, limit: int, descending_order: bool):
         params = [query, cursor, limit, descending_order]
@@ -162,6 +196,18 @@ class RestClient:
     def Publish(self, sender: str, compiled_modules: str, gas: str, gas_budget: int):
         params = [sender, compiled_modules, gas, gas_budget]
         return self.jsonRpc("sui_publish", params)
+
+    def RequestAddDelegation(self, signer: str, coins: list[str], amount: int, validator: str, gas: str, gas_budget: int):
+        params = [signer, coins, amount, validator, gas, gas_budget]
+        return self.jsonRpc("sui_requestAddDelegation", params)
+
+    def RequestSwitchDelegation(self, signer: str, delegation: str, new_validator_address: str, switch_pool_token_amount: int, gas: str, gas_budget: int):
+        params = [signer, delegation, new_validator_address, switch_pool_token_amount, gas, gas_budget]
+        return self.jsonRpc("sui_requestSwitchDelegation", params)
+
+    def RequestWithdrawDelegation(self, signer: str, delegation: str, staked_sui: str, principal_withdraw_amount: int, gas: str, gas_budget: int):
+        params = [signer, delegation, staked_sui, principal_withdraw_amount, gas, gas_budget]
+        return self.jsonRpc("sui_requestWithdrawDelegation", params)
 
     def SplitCoin(self, signer: str, coin_object_id: str, split_amounts: list[int], gas: str, gas_budget: int):
         params = [signer, coin_object_id, split_amounts, gas, gas_budget]
@@ -266,7 +312,8 @@ class SuiClient(RestClient):
     def GetSpecificObjectsOwnedByAddress(self, accountAddress, filterObjectType):
         self.session = aiohttp.ClientSession()
         loop = asyncio.get_event_loop()
-        getObjectsTask = loop.create_task(self.GetSpecificObjectsOwnedByAddressMain(accountAddress, filterObjectType))
+        getObjectsTask = loop.create_task(
+            self.GetSpecificObjectsOwnedByAddressMain(accountAddress, filterObjectType))
         loop.run_until_complete(getObjectsTask)
         loop.run_until_complete(self.session.close())
         loop.close()
